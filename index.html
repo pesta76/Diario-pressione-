@@ -10,9 +10,9 @@ const KEY='diario-pressione-v1',SK='diario-pressione-settings-v1';
 const $=id=>document.getElementById(id),pad=n=>String(n).padStart(2,'0');
 const today=()=>{let d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())};
 const safeParse=(k,fallback)=>{try{const v=JSON.parse(localStorage.getItem(k));return v??fallback}catch{return fallback}};
-let rows=safeParse(KEY,[]),settings=safeParse(SK,{sy:135,sr:140,dy:85,dr:90}),selected=today(),view=new Date(selected+'T12:00'),mode='week';
+let rows=safeParse(KEY,[]),settings=safeParse(SK,{sy:135,sr:140,dy:85,dr:90}),selected=safeParse('diario-pressione-selected-v1',today()),view=new Date(selected+'T12:00'),mode='week';
 if(!Array.isArray(rows))rows=[];
-const persist=()=>{localStorage.setItem(KEY,JSON.stringify(rows))};
+const persist=()=>{localStorage.setItem(KEY,JSON.stringify(rows));const saved=JSON.parse(localStorage.getItem(KEY)||'null');if(!Array.isArray(saved)||saved.length!==rows.length)throw Error('Verifica salvataggio fallita')};
 const color=(v,y,r)=>v>=r?'red':v>=y?'yellow':'green';
 const dayLabel=d=>new Date(d+'T12:00').toLocaleDateString('it-IT',{day:'numeric',month:'long',year:'numeric'});
 const escapeHtml=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -20,6 +20,8 @@ const slot=t=>{const h=Number(t.slice(0,2));return h<6?'Notte':h<12?'Mattina':h<
 function periodDates(){let d=new Date(selected+'T12:00');if(mode==='week'){const w=(d.getDay()+6)%7;d.setDate(d.getDate()-w);let e=new Date(d);e.setDate(e.getDate()+7);return [d,e]}return [new Date(d.getFullYear(),d.getMonth(),1,12),new Date(d.getFullYear(),d.getMonth()+1,1,12)]}
 const iso=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
 function render(){
+try{localStorage.setItem('diario-pressione-selected-v1',JSON.stringify(selected))}catch(e){}
+
 $('month').textContent=view.toLocaleDateString('it-IT',{month:'long',year:'numeric'});
 const first=new Date(view.getFullYear(),view.getMonth(),1),n=new Date(view.getFullYear(),view.getMonth()+1,0).getDate();
 let html=['L','M','M','G','V','S','D'].map(x=>'<div class="muted" style="text-align:center">'+x+'</div>').join('');
@@ -47,7 +49,7 @@ $('breakdown').innerHTML='<p>Massima: <span class="yellow">'+subset.filter(r=>co
 }
 function reset(){ $('form').reset();$('edit').value='';$('date').value=selected;let now=new Date();$('time').value=pad(now.getHours())+':'+pad(now.getMinutes());$('formTitle').textContent='Nuova misurazione'}
 function edit(id){let r=rows.find(x=>x.id===id);if(!r)return;$('edit').value=id;for(const k of ['date','time','sys','dia','pulse','note'])$(k).value=r[k]??'';$('formTitle').textContent='Modifica misurazione';$('form').scrollIntoView({behavior:'smooth'})}
-$('form').onsubmit=e=>{e.preventDefault();let r={id:$('edit').value||('m'+Date.now()+Math.random().toString(36).slice(2)),date:$('date').value,time:$('time').value,sys:Number($('sys').value),dia:Number($('dia').value),pulse:Number($('pulse').value),note:$('note').value.trim()};if(!/^\d{4}-\d{2}-\d{2}$/.test(r.date)||!/^([01]\d|2[0-3]):[0-5]\d$/.test(r.time)||r.sys<=r.dia||r.sys<40||r.sys>300||r.dia<20||r.dia>200||r.pulse<20||r.pulse>250){alert('Controlla data, orario e valori inseriti.');return}rows=rows.filter(x=>x.id!==r.id);rows.push(r);try{persist()}catch{alert('Salvataggio non riuscito: memoria del dispositivo non disponibile.');return}selected=r.date;view=new Date(selected+'T12:00');reset();render();$('notice').textContent='Misurazione salvata sul dispositivo.'};
+$('form').onsubmit=e=>{e.preventDefault();let r={id:$('edit').value||('m'+Date.now()+Math.random().toString(36).slice(2)),date:$('date').value,time:$('time').value,sys:Number($('sys').value),dia:Number($('dia').value),pulse:Number($('pulse').value),note:$('note').value.trim()};if(!/^\d{4}-\d{2}-\d{2}$/.test(r.date)||!/^([01]\d|2[0-3]):[0-5]\d$/.test(r.time)||r.sys<=r.dia||r.sys<40||r.sys>300||r.dia<20||r.dia>200||r.pulse<20||r.pulse>250){alert('Controlla data, orario e valori inseriti.');return}const previous=rows.slice();rows=rows.filter(x=>x.id!==r.id);rows.push(r);try{persist()}catch{rows=previous;alert('Salvataggio non riuscito: memoria del dispositivo non disponibile.');return}selected=r.date;view=new Date(selected+'T12:00');reset();render();$('notice').textContent='Misurazione verificata e salvata sul dispositivo.'};
 $('cancel').onclick=reset;
 $('prev').onclick=()=>{view=new Date(view.getFullYear(),view.getMonth()-1,1);selected=iso(view);reset();render()};
 $('next').onclick=()=>{view=new Date(view.getFullYear(),view.getMonth()+1,1);selected=iso(view);reset();render()};
