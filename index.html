@@ -10,7 +10,7 @@ const KEY='diario-pressione-v1',SK='diario-pressione-settings-v1';
 const $=id=>document.getElementById(id),pad=n=>String(n).padStart(2,'0');
 const today=()=>{let d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())};
 const safeParse=(k,fallback)=>{try{const v=JSON.parse(localStorage.getItem(k));return v??fallback}catch{return fallback}};
-let rows=safeParse(KEY,[]),storageReady=false,settings=safeParse(SK,{sy:135,sr:140,dy:85,dr:90}),selected=safeParse('diario-pressione-selected-v1',today()),view=new Date(selected+'T12:00'),mode='week';
+let rows=safeParse(KEY,[]),storageReady=false,settings=safeParse(SK,{sy:135,sr:140,dy:85,dr:90}),selected=today(),view=new Date(selected+'T12:00'),mode='week';
 if(!Array.isArray(rows))rows=[];
 const DBNAME='diario-pressione-database-v2';
 function dbOpen(){return new Promise((resolve,reject)=>{if(!('indexedDB'in window)){reject(Error('IndexedDB non disponibile'));return}const q=indexedDB.open(DBNAME,1);q.onupgradeneeded=()=>{if(!q.result.objectStoreNames.contains('data'))q.result.createObjectStore('data')};q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error)})}
@@ -122,5 +122,18 @@ const download=(name,type,content)=>{const url=URL.createObjectURL(new Blob([con
 $('backup').onclick=()=>download('diario-pressione-backup.json','application/json',JSON.stringify({version:1,rows,settings},null,2));
 $('exportCsv').onclick=()=>{const lines=[['Data','Ora','Massima','Minima','Battiti','Note'],...rows.slice().sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time)).map(r=>[r.date,r.time,r.sys,r.dia,r.pulse,r.note])];download('diario-pressione.csv','text/csv;charset=utf-8','\ufeff'+lines.map(row=>row.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(';')).join('\r\n'))};
 $('restore').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{let obj=JSON.parse(await f.text());if(!Array.isArray(obj.rows)||!obj.rows.every(r=>/^\d{4}-\d{2}-\d{2}$/.test(r.date)&&/^([01]\d|2[0-3]):[0-5]\d$/.test(r.time)&&Number.isFinite(r.sys)&&Number.isFinite(r.dia)&&Number.isFinite(r.pulse)&&typeof r.id==='string'))throw Error('Formato non valido');if(!confirm('Sostituire tutte le misurazioni attuali con il backup?'))return;rows=obj.rows.map(r=>({...r,note:String(r.note??'').slice(0,200)}));await persist();render();alert('Backup ripristinato.')}catch(err){alert('Impossibile ripristinare: '+err.message)}e.target.value=''};
+// All'apertura e al ritorno nell'app seleziona il giorno corrente, senza modificare le misurazioni.
+let lastToday=today();
+function refreshCurrentDay(){
+ const current=today();
+ if(current!==lastToday || selected!==current){
+   lastToday=current;selected=current;view=new Date(current+'T12:00');
+   reset();render();
+ }
+}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshCurrentDay()});
+window.addEventListener('pageshow',refreshCurrentDay);
+window.addEventListener('focus',refreshCurrentDay);
+setInterval(()=>{if(!document.hidden&&today()!==lastToday)refreshCurrentDay()},30000);
 $('checkStorage').onclick=diagnostic;reset();render();initializeStorage().then(diagnostic);
 </script></body></html>
